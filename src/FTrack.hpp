@@ -1,5 +1,8 @@
 #ifndef FTRACK_HPP
 #define FTRACK_HPP
+
+#define FOR_SHOW
+
 #include "AR_utils.hpp"
 
 #include "ORBextractor.hpp"
@@ -10,11 +13,12 @@
 
 
 
+
 class FTrack{
     //class TermCriteria termcrit_t1(1,30,0.03);
 public:
 
-    int Init(const Mat& _frame, const Quadrangle& _qua);
+    bool Init(const Mat& _frame, const Quadrangle& _qua);
     int Process(Mat& _frame);
     void GetQua(Quadrangle& _qua);
     int BF(Mat& _frame);
@@ -31,9 +35,12 @@ public:
 
 private:
 
+    // constant
+    int maxPtsNum;
+
     //picture size
-    int PW=640;
-    int PH=480;
+    int PW;
+    int PH;
 
     //for update
     int NofCQ;
@@ -48,11 +55,12 @@ private:
     int FailCount;
 
     //for full-lost BF
-    vector<KeyPoint> kps1;Mat des1;
+    vector<KeyPoint> kps1;
+    Mat des1;
     int TH_LOW=60;
     int TH_HIGH;
     int HISTO_LENGTH=30;
-    int NNratio=1;
+    float NNratio=1.0;
     bool mbCheckOrientation =false;
     int ThRANSAC =6;
     vector<int> rotHist[30];  //30
