@@ -1,7 +1,7 @@
 #ifndef FTRACK_HPP
 #define FTRACK_HPP
 
-#define FOR_SHOW
+//#define FOR_SHOW
 
 #include "AR_utils.hpp"
 
