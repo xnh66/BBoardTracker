@@ -126,12 +126,15 @@ int FTrack::Process(Mat& _frame){
     Size winSize(31,31);
     calcOpticalFlowPyrLK(gray_old,gray_new, points_old, points_new, maskOF, err, winSize, 3, termcrit_of, 0, 0.0001);   // OutputArray maskOF(01) ,  err
 
+    if( CountNonZero(maskOF) < 20 )
+    { status=2;return 2;}
     double ptOF= ((double)getTickCount()-stOF)/((double)getTickFrequency());
 
     vector<Point2f> fundP2fs_1 = P2fsToP2fs(points_old, maskOF);
     vector<Point2f> fundP2fs_2 = P2fsToP2fs(points_new, maskOF);
 
     vector<uchar> fundStates;
+
     Mat ff = findFundamentalMat(fundP2fs_1,fundP2fs_2,fundStates);
 
     float fundSurvival_1=( float(CountNonZero(fundStates))) / ( float(fundStates.size()) );
