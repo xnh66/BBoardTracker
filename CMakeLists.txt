@@ -19,7 +19,7 @@ ${PROJECT_SOURCE_DIR/src}
 add_library(${PROJECT_NAME} SHARED
 src/AR_utils.cpp
 src/ORBextractor.cpp
-src/Ftrack.cpp
+src/FTrack.cpp
 )
 
 target_link_libraries(${PROJECT_NAME}

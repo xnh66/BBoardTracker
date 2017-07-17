@@ -19,9 +19,9 @@ class FTrack{
 public:
 
     bool Init(const Mat& _frame, const Quadrangle& _qua);
-    int Process(Mat& _frame);
+    int Process(const Mat& _frame);
     void GetQua(Quadrangle& _qua);
-    int BF(Mat& _frame);
+    int BF(const Mat& _frame);
     bool isInPicture(Rect& _rect);
     Point2f GetCenter(Quadrangle& _qua);
     Quadrangle GetNewQua(Point2f& _center,int _w, int _h);
