@@ -8,8 +8,16 @@ FTrack::FTrack(){
     KFfirst=0;
     FailCount=0;
 
+#ifdef SKIP_BF
+    forBFstatus = 0;
+#else
+    forBFstatus = 2;
+#endif
+
     // constant
     maxPtsNum=300;
+    maxToleranceBFNum = 50;
+
 }
 
 bool FTrack::Init(const Mat& _frame, const Quadrangle& _qua){
@@ -17,6 +25,8 @@ bool FTrack::Init(const Mat& _frame, const Quadrangle& _qua){
 
     PW = _frame.cols;
     PH = _frame.rows;
+
+    maxPtsNum *= (float)PW*1.0/480.0;
 
     mInitQua=_qua;
     mIQua=_qua;
@@ -34,7 +44,14 @@ bool FTrack::Init(const Mat& _frame, const Quadrangle& _qua){
     int ORB_EdgeThres=19;
     mSz = Size(_frame.cols, _frame.rows);
     recForORBs = GetMBRfromQuadr(mIQua,mSz);
+
+    if(!CheckRect(recForORBs,PW,PH,0))
+        return false;
+
     Rect recExpnd = ExpandRectEdge(recForORBs, mSz, ORB_EdgeThres);
+
+    if(!CheckRect(recExpnd,PW,PH,ORB_EdgeThres))
+        return false;
 
     Mat tmp = Mat(gray_old,recExpnd);
     Mat imgForORBs;
@@ -47,6 +64,10 @@ bool FTrack::Init(const Mat& _frame, const Quadrangle& _qua){
     //get first Qua--center of big Qua
     int CW=cvRound((mIQua.br.x-mIQua.tl.x)/4);
     int CH=cvRound((mIQua.br.y-mIQua.tl.y)/4);
+
+    if( CW<1 || CH<1 )
+        return false;
+
     Point2f CQCenter=GetCenter(mIQua);
     mCQua=GetNewQua(CQCenter,CW,CH);
 
@@ -92,24 +113,22 @@ bool FTrack::Init(const Mat& _frame, const Quadrangle& _qua){
     return true;
 }
 
-int FTrack::Process(const Mat& _frame){
+int FTrack::Process(const Mat& _frame) {
 
     //TODO: to make the return value clearly.
     //      status == 0, how to get
     //      BF() success, return 2?
-    if(points_old.size()<20) {
-        status=2;
-        return 2;
-    }
-
-    if(status==0){
+    if (status == 0) {
         return 0;
-    }
-    else if(status==2){
+    } else if (status == 2) {
         BF(_frame);
         return 2;
     }
 
+    if (points_old.size() < 20) {
+        status = forBFstatus;
+        return 2;
+    }
 
     cv::TermCriteria termcrit_of(2, 30, 0.01);
     maskOF.clear();
@@ -118,16 +137,21 @@ int FTrack::Process(const Mat& _frame){
     nmaskC.clear();
 
     _frame.copyTo(img_new);
-    cvtColor(img_new,gray_new,COLOR_BGR2GRAY);
+    cvtColor(img_new, gray_new, COLOR_BGR2GRAY);
 
     // use no pyramid for OF.
-    double stOF = (double)getTickCount();
+    double stOF = (double) getTickCount();
     vector<float> err;
-    Size winSize(31,31);
-    calcOpticalFlowPyrLK(gray_old,gray_new, points_old, points_new, maskOF, err, winSize, 3, termcrit_of, 0, 0.0001);   // OutputArray maskOF(01) ,  err
+    Size winSize(31, 31);
+    calcOpticalFlowPyrLK(gray_old, gray_new, points_old, points_new, maskOF, err, winSize, 3, termcrit_of, 0,
+                         0.0001);   // OutputArray maskOF(01) ,  err
 
-    if( CountNonZero(maskOF) < 20 )
-    { status=2;return 2;}
+    if (CountNonZero(maskOF) < 20)
+    {
+        status = forBFstatus;
+        return 2;
+    }
+
     double ptOF= ((double)getTickCount()-stOF)/((double)getTickFrequency());
 
     vector<Point2f> fundP2fs_1 = P2fsToP2fs(points_old, maskOF);
@@ -137,9 +161,13 @@ int FTrack::Process(const Mat& _frame){
 
     Mat ff = findFundamentalMat(fundP2fs_1,fundP2fs_2,fundStates);
 
-    float fundSurvival_1=( float(CountNonZero(fundStates))) / ( float(fundStates.size()) );
-    if(fundSurvival_1<0.2 || CountNonZero(fundStates) <20 )
-        {status=2; return 2;  }      // failed frame
+    float fundSurvival_1=( float(CountNonZero(fundStates))) / ( float(maskOF.size()) );
+    if(fundSurvival_1<0.4 || CountNonZero(fundStates) <20 )
+    {
+        status=forBFstatus;
+        return 2;
+    }      // failed frame
+
     maskOF = OverlayMask(maskOF,fundStates);
 
     /*
@@ -188,10 +216,12 @@ int FTrack::Process(const Mat& _frame){
         fundP2fs_fin2.push_back(mvmPn2s[i].first);
     }
 
+
+#ifdef FOR_SHOW
+
     Mat show2;
     img_new.copyTo(show2);
 
-#ifdef FOR_SHOW
     //find and draw contours (optional,only for show)
     vector<int> hull2;
     convexHull(Mat(fundP2fs_fin2), hull2, true);
@@ -202,6 +232,7 @@ int FTrack::Process(const Mat& _frame){
         line(show2, pt20, pt2, Scalar(0, 255, 0), 1,LINE_AA);
         pt20 = pt2;
     }
+
 #endif
 
     //boundingRect, get new Rect
@@ -218,7 +249,9 @@ int FTrack::Process(const Mat& _frame){
 
     vector<Point2f> addpoints;
 
-    if(!isInPicture(two)){
+    //if(!isInPicture(two))
+    if(!CheckRect(two,PW,PH,0))
+    {
         cerr<<"Rect out of Picture!!! : "<<two.tl()<<" "<<two.br()<<endl;
     }
     //if(isInPicture(two)){
@@ -229,19 +262,22 @@ int FTrack::Process(const Mat& _frame){
 
             //try to expand the Rect. if outside picture, don't expand
             Rect tmp(two.tl().x-ADD , two.tl().y-ADD , two.width+2*ADD , two.height+2*ADD);
-            if(!isInPicture(tmp)){
+            //if(!isInPicture(tmp)){
+            if(!CheckRect(tmp,PW,PH,0)){
               //  tmp=Rect(two.tl().x-ADD/2 , two.tl().y-ADD/2 , two.width+ADD , two.height+ADD);
-                if(tmp.x<0)
-                    tmp.x=0;
-                if(tmp.y<0)
-                    tmp.y=0;
-                if(tmp.br().x>PW)
-                    tmp.width = PW-tmp.x;
-                if(tmp.br().y>PH)
-                    tmp.height = PH-tmp.y;
+                cerr<<"Rect out of Picture!!! : "<<tmp.tl()<<" "<<tmp.br()<<endl;
+                tmp = ModifyRect(tmp,PW,PH);
             }
-            if(isInPicture(tmp)){
-                two=tmp;
+
+            if(CheckRect(tmp,PW,PH,0)) {
+                cerr<<"Rect in the Picture !!!!!!!! " <<tmp.tl()<<" "<<tmp.br()<<endl;
+                two = tmp;
+            }
+            else
+            {
+                status = forBFstatus;
+                cerr<<"Rect stilllllllllllllll out of Picture!!! : "<<tmp.tl()<<" "<<tmp.br()<<endl;
+                return 2;
             }
 
             //add points inside Rect
@@ -307,6 +343,12 @@ int FTrack::Process(const Mat& _frame){
     //delete points if their norm too big(>4*dis_avg) 4 can be changed
     float dis_max=0.0;
     float dis_avg;float dis_sum=0.0;
+
+    if(points_centernew.size()==0){
+        status = forBFstatus;
+        return 2;
+    }
+
     Point2f Center=GetCentroid(points_centernew);
     for(int i=0;i<points_centernew.size();i++){
         float tmpdis = norm(Point2f((points_centernew[i].x-Center.x),(points_centernew[i].y-Center.y)));
@@ -315,7 +357,11 @@ int FTrack::Process(const Mat& _frame){
             dis_max = tmpdis;
         }
     }
-    dis_avg = dis_sum/points_centernew.size();
+    if(points_centernew.size()!=0)
+        dis_avg = dis_sum/points_centernew.size();
+    else
+        dis_avg = dis_sum;
+
     vector<Point2f>::iterator it;
     for(it=points_centernew.begin();it!=points_centernew.end();){
         if(norm(Point2f(((*it).x-Center.x),((*it).y-Center.y)))>4*dis_avg){
@@ -330,16 +376,30 @@ int FTrack::Process(const Mat& _frame){
     maskc = Mat::zeros(img_new.size(),CV_8U);
     Rect Rc=boundingRect(points_centernew);     //Get new small Rect
 
+    Rect tmp_Rc = Rc;
+    if(!CheckRect(tmp_Rc,PW,PH,0)){
+
+        cerr<<"Rect out of Picture!!! : "<<tmp_Rc.tl()<<" "<<tmp_Rc.br()<<endl;
+
+        tmp_Rc = ModifyRect(tmp_Rc,PW,PH);
+
+        if(!CheckRect(tmp_Rc,PW,PH,0)) {
+            cerr << "Rect stilllllllllllllll out of Picture!!! : " << two.tl() << " " << two.br() << endl;
+            status = forBFstatus;
+            return 2;
+        }
+        cerr<<"Rect innnnnnn Picture!!! : "<<tmp_Rc.tl()<<" "<<tmp_Rc.br()<<endl;
+    }
+    Rc = tmp_Rc;
+
     //tmpCQua=GetQuadrfromRect(Rc);
 
     // usually it is always inPicture, right?
-    if(isInPicture(Rc)){
+    if(1){
         //if small Rect too small, we have to expand it
      //   if( (Rc.width<5||Rc.height<5) && (Rc.tl().x>1) && (Rc.tl().y>1) ) {
-        if( (Rc.width<10||Rc.height<10) && (Rc.tl().x>1) && (Rc.tl().y>1) ) {
-            Rect tmpRc(Rc.tl().x-1,Rc.tl().y-1,Rc.width+2,Rc.height+2);
-            Rc=tmpRc;
-        }
+        if(Rc.width<10||Rc.height<10)
+            Rc = ExpandRectEdge(Rc, Size(PW,PH),2);
 
         tmpCQua = GetQuadrfromRect(Rc);
         nmaskC.clear();
@@ -390,7 +450,7 @@ int FTrack::Process(const Mat& _frame){
 
     if(points_centernew.size()<=1){
         cerr<<"Lack of points "<<endl;
-        status=2;
+        status=forBFstatus;
         return 2;
     }
 
@@ -447,6 +507,8 @@ int FTrack::Process(const Mat& _frame){
 }
 
 int FTrack::BF(const Mat& _frame){
+
+    cout<<     "             FailCount : "<< FailCount<<endl;
     _frame.copyTo(img_new);
     cvtColor(img_new,gray_new,COLOR_BGR2GRAY);
     vector<KeyPoint> cndKpsF2;
@@ -455,8 +517,10 @@ int FTrack::BF(const Mat& _frame){
     ORBextractor orber(2*maxPtsNum,1.2,1,20,7,false);       //nfeatures,scaleFactor,nlevel,iniThFAST,minTh,buseOrcTree
     orber(gray_new,Mat(),cndKpsF2,cndOrbDesF2);        //get pre- kps and des
 
-    for(int i=0;i<HISTO_LENGTH;i++)
-        rotHist[i].reserve(2*maxPtsNum);
+    for(int i=0;i<HISTO_LENGTH;i++) {
+        rotHist[i].clear();
+        rotHist[i].reserve(2 * maxPtsNum);
+    }
 
     vector<int> vnMatches12(kps1.size(),-1);
     vector<int> vnMatches21(cndKpsF2.size(),-1);
@@ -524,6 +588,9 @@ int FTrack::BF(const Mat& _frame){
     cout<<"orinmatchs:  "<<nmatches<<endl;
 
     //Get new points after BF--just for new Centroid
+
+    points_centernew.clear();
+    nmaskC.clear();
        for(int i=0;i<nmatches;i++){
             if(vnMatches12[i]>=0){
 
@@ -545,9 +612,12 @@ int FTrack::BF(const Mat& _frame){
            FailCount++;
 
            //try 50 times; 50 can be changed
-           if(FailCount==50){
+           if( FailCount >= maxToleranceBFNum ){
                status=0;    //close Tracking
+               return 2;
            }
+
+           status = forBFstatus;
            return 2;    //status unchanged, BF again
 
        }
@@ -571,12 +641,38 @@ int FTrack::BF(const Mat& _frame){
     //new big points
     Mat maskn = Mat::zeros(img_new.size(),CV_8U);
     Rect big(mIQua.tl,mIQua.br);
+
+    Rect tmp_Rc = big;
+    if(!CheckRect(tmp_Rc,PW,PH,0)){
+
+        cerr<<"Rect out of Picture!!! : "<<tmp_Rc.tl()<<" "<<tmp_Rc.br()<<endl;
+
+        tmp_Rc = ModifyRect(tmp_Rc,PW,PH);
+
+        if(!CheckRect(tmp_Rc,PW,PH,0)){
+            FailCount++;
+            cerr<<"Rect stilllllllllllllll out of Picture!!! : "<<tmp_Rc.tl()<<" "<<tmp_Rc.br()<<endl;
+            if(FailCount>=maxToleranceBFNum){
+                status = 0 ;
+                return 2;
+            }
+            status = forBFstatus;
+            return 2;
+        }
+        else
+            cerr<<"Rect in the Picture !!!!!!!! " <<tmp_Rc.tl()<<" "<<tmp_Rc.br()<<endl;
+    }
+    big = tmp_Rc;
+
     maskn(big).setTo(255);
     cv::TermCriteria termcrit_n(2,30,0.03);
+    points_old.clear();
     goodFeaturesToTrack(gray_new, points_old, 500, 0.01, 10, maskn, 3, 0, 0.04);
     cornerSubPix(gray_new, points_old, Size(10,10), Size(-1,-1), termcrit_n);
 
     //new small points
+    points_centerold.clear();
+    maskC.clear();
     for(int i=0;i<points_old.size();i++){
 
         if(IsInsideQuadrangle(mCQua,points_old[i])){
@@ -588,6 +684,20 @@ int FTrack::BF(const Mat& _frame){
         }
 
     }
+
+    if(points_centerold.size()<=1){
+        cerr<<" After BF, center points = "<<points_centerold.size()<<"! NOT ENOUGH"<<endl;
+        FailCount++;
+        if(FailCount>=maxToleranceBFNum){
+            status = 0;
+            return 2;
+        }
+        status = forBFstatus;
+        return 2;
+    }
+
+    FinalPoint=GetCentroid(points_centerold);
+
     //update frame
     img_new.copyTo(img_old);
     gray_new.copyTo(gray_old);
@@ -610,6 +720,7 @@ int FTrack::BF(const Mat& _frame){
     //back to OF
     cout<<"back to OF"<<endl;
     status=1;
+
     FailCount=0;
 
     return 1;
@@ -650,6 +761,11 @@ void FTrack::GetFinalPoint(Point2f& _FP){
 Point2f FTrack::GetCentroid(vector<Point2f>& _Points){
 
     float sum_x=0.0;float sum_y=0.0;
+    if(_Points.size()==0){
+        Point2f Center(0.0,0.0);
+        return Center;
+
+    }
     for(int i=0;i<_Points.size();i++){
         sum_x += _Points[i].x;
         sum_y += _Points[i].y;

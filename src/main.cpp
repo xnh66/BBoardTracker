@@ -4,7 +4,7 @@
 #include <fstream>
 
 using namespace std;
-#define USE_VIDEO
+//#define USE_VIDEO
 
 int main(int argc, char **argv)
 {
@@ -72,10 +72,12 @@ int main(int argc, char **argv)
 
 
         TrackResult=ft.Process(image);
-        cout<<"TrackResult: "<<TrackResult<<endl;   //1-stable;2-unstable;3-fail
+        int TrackStatus = ft.GetStatus();
+
+        cout<<"TrackResult: "<<TrackResult<< " STATUS : "<<TrackStatus<<endl;   //1-stable;2-unstable;3-fail
 
 
-        if(TrackResult==3){
+        if(TrackResult==0){
             cerr<<"over!"<<endl;
             break;
         }

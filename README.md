@@ -35,4 +35,9 @@ ft.GetFinalPoint(Center);	//得到最终靶点
 ```
 image的size由调用方决定，并且保证Init和Process过程的image size永远保持一致。
 最终靶点的坐标是在image size决定的坐标系之下的。
+
+src/FTrack.hpp:5 
+5: //#define SKIP_BF
+将这句话注释掉之后，即可以去掉暴匹过程。
+
 ```

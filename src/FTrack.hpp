@@ -2,6 +2,7 @@
 #define FTRACK_HPP
 
 //#define FOR_SHOW
+//#define SKIP_BF
 
 #include "AR_utils.hpp"
 
@@ -38,9 +39,15 @@ private:
     // constant
     int maxPtsNum;
 
+    // max tolerance for BF
+    int maxToleranceBFNum;
+
     //picture size
     int PW;
     int PH;
+
+    // whether skip BF or not
+    int forBFstatus;
 
     //for update
     int NofCQ;

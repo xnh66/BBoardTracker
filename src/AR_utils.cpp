@@ -251,6 +251,12 @@ Rect ExpandRectEdge(const Rect& recIn, const Size& sz, const int edge){
     return recOut;
 }
 
+Rect ModifyRect(const Rect& recIn, int _W, int _H){
+
+    Size sz(_W,_H);
+    return ExpandRectEdge(recIn,sz,0);
+}
+
 int CountNonZero(const vector<uchar>& stats){
     int count=0;
     for(int i=0;i<stats.size();i++){
@@ -478,4 +484,18 @@ double CalcAverageLum(const Mat& frame, Quadrangle& qua){
     
     double averageLum = lum/(double)count;
     return averageLum;
+}
+
+bool CheckRect(const Rect& _rect, int _W, int _H, int _minLength){
+
+    if( _rect.height <= _minLength ||  _rect.width <= _minLength)
+        return false;
+
+    if( _rect.tl().x <0 || _rect.tl().x > _W || _rect.tl().y < 0 || _rect.tl().y> _H)
+        return false;
+
+    if( _rect.br().x <0 || _rect.br().x > _W || _rect.br().y < 0 || _rect.br().y> _H)
+        return false;
+
+    return true;
 }

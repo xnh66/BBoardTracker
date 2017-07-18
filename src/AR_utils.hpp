@@ -103,6 +103,7 @@ Matx23f AffineMatOfQuas(const Quadrangle& qua_1, const Quadrangle& qua_2);
 
 double CalcAverageLum(const Mat& frame, Quadrangle& qua);
 
+bool CheckRect(const Rect& _rect, int _W, int _H, int _minLength);
 
-
+Rect ModifyRect(const Rect& recIn, int _W, int _H);
 #endif /* AR_utils_hpp */
